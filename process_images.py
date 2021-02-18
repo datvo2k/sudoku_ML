@@ -13,9 +13,20 @@ def distance_between(p1, p2):
     return np.sqrt((a ** 2) + (b ** 2))
 
 
+def rotate_image(image, angle, center=None):
+    (h, w) = image.shape[:2]
+
+    if center is None:
+        center = (w / 2, h / 2)
+    rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
+    result = cv2.warpAffine(image, rot_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+    return result
+
+
 def filter_sudoku(image):
     global y, h, x, w
     img = cv2.imread(image)
+    ratio = img.shape[0] / 300.0
     orig = img.copy()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blur = cv2.medianBlur(gray, 5)
@@ -33,7 +44,7 @@ def filter_sudoku(image):
     screenCnt = None
 
     for c in cnts:
-        x, y, w, h = cv2.boundingRect(c)    # Find contour of box
+        x, y, w, h = cv2.boundingRect(c)  # Find contour of box
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.015 * peri, True)
 
@@ -42,14 +53,51 @@ def filter_sudoku(image):
             break
 
     ROI = orig[y:y + h, x:x + w]
+    rows, cols, ch = ROI.shape
+    # dst = rotate_image(ROI, 0)
 
-    cv2.imshow('image', close)
-    cv2.imshow('image_before', img)
-    cv2.imshow("crop", ROI)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    pts = screenCnt.reshape(4, 2)
+    rect = np.zeros((4, 2), dtype="float32")
+
+    # the top-left point has the smallest sum whereas the
+    # bottom-right has the largest sum
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+
+    # compute the difference between the points -- the top-right
+    # will have the minumum difference and the bottom-left will
+    # have the maximum difference
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+
+    # multiply the rectangle by the original ratio
+    rect *= ratio
+
+    (tl, tr, br, bl) = rect
+    widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+    widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+
+    heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+    heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+
+    maxWidth = max(int(widthA), int(widthB))
+    maxHeight = max(int(heightA), int(heightB))
+    # construct our destination points which will be used to
+    # map the screen to a top-down, "birds eye" view
+    dst = np.array([
+        [0, 0],
+        [maxWidth - 1, 0],
+        [maxWidth - 1, maxHeight - 1],
+        [0, maxHeight - 1]], dtype="float32")
+    # calculate the perspective transform matrix and warp
+    # the perspective to grab the screen
+    M = cv2.getPerspectiveTransform(rect, dst)
+    warp = cv2.warpPerspective(ROI, M, (maxWidth, maxHeight))
+    return warp
 
 
 if __name__ == '__main__':
-    # _27_6709977.jpeg - .jpeg - _139_9456064.jpeg
+    # _27_6709977.jpeg - .jpeg - _139_9456064.jpeg - _14_6976259.jpeg
     filter_sudoku('aug/_27_6709977.jpeg')
