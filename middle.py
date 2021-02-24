@@ -16,10 +16,12 @@ def get_board(img, model):
     clf = joblib.load(model)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = cv2.blur(gray, (1, 1))
-    edges = cv2.Canny(gray, low_threshold, low_threshold * ratio2, kernel_size)
-    lines = cv2.HoughLines(edges, rho=1, theta=np.pi/180, threshold=100)
+    # edges = cv2.Canny(gray, low_threshold, low_threshold * ratio2, kernel_size)
+    edges = cv2.Canny(gray, 40, 100)
+    lines = cv2.HoughLinesP(edges, 1, theta=np.pi / 180, threshold=80,
+                            minLineLength=10, maxLineGap=300)
 
-    if lines is not None:
+    '''if lines is not None:
         lines = lines[0]
         # lines = sorted(lines, key=lambda line: line[0])
         for rho, theta in lines:
@@ -32,7 +34,11 @@ def get_board(img, model):
             x2 = int(x0 - 1000 * (-b))
             y2 = int(y0 - 1000 * (a))
 
-            cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)'''
+
+    for x in range(0, len(lines)):
+        for x1, y1, x2, y2 in lines[x]:
+            cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
     cv2.imshow("crop", img)
     cv2.waitKey(0)

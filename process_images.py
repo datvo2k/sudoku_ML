@@ -4,6 +4,7 @@ import imutils
 import operator
 from skimage import data, exposure, img_as_float
 from numpy import asarray
+from imutils.perspective import four_point_transform
 
 
 def distance_between(p1, p2):
@@ -52,7 +53,7 @@ def filter_sudoku(image):
             screenCnt = approx
             break
 
-    ROI = orig[y:y + h, x:x + w]
+    '''ROI = orig[y:y + h, x:x + w]
     rows, cols, ch = ROI.shape
     # dst = rotate_image(ROI, 0)
 
@@ -95,9 +96,15 @@ def filter_sudoku(image):
     # the perspective to grab the screen
     M = cv2.getPerspectiveTransform(rect, dst)
     warp = cv2.warpPerspective(ROI, M, (maxWidth, maxHeight))
-    return warp
+    return warp'''
+
+    puzzle = four_point_transform(img, screenCnt.reshape(4, 2))
+    warped = four_point_transform(gray, screenCnt.reshape(4, 2))
+    # check to see if we are visualizing the perspective transform
+    # show the output warped image (again, for debugging purposes)
+    # cv2.imshow("Puzzle Transform", puzzle)
+    # cv2.waitKey(0)
+    # return a 2-tuple of puzzle in both RGB and grayscale
+    return puzzle
 
 
-if __name__ == '__main__':
-    # _27_6709977.jpeg - .jpeg - _139_9456064.jpeg - _14_6976259.jpeg
-    filter_sudoku('aug/_27_6709977.jpeg')
