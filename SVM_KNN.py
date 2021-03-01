@@ -1,65 +1,51 @@
 import numpy as np
-from sklearn import metrics
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC, SVC
 import os
-import gzip
+import cv2
 import joblib
 
-os.listdir()
-parameter_candidates = [{'C': [0.001, 0.01, 0.1, 1, 5, 10, 100, 1000]}, ]
+# Generate training set
+TRAIN_PATH = "mnist_data/Train"
+list_folder = os.listdir(TRAIN_PATH)
+trainset = []
+for folder in list_folder:
+    flist = os.listdir(os.path.join(TRAIN_PATH, folder))
+    for f in flist:
+        im = cv2.imread(os.path.join(TRAIN_PATH, folder, f))
+        im = cv2.cvtColor(im, cv2.COLOR_RGB2GRAY)
+        im = cv2.resize(im, (36, 36))
+        trainset.append(im)
+# Labeling for trainset
+train_label = []
+for i in range(0, 10):
+    temp = 500 * [i]
+    train_label += temp
 
+# Generate testing set
+TEST_PATH = "mnist_data/Test"
+list_folder = os.listdir(TEST_PATH)
+testset = []
+test_label = []
+for folder in list_folder:
+    flist = os.listdir(os.path.join(TEST_PATH, folder))
+    for f in flist:
+        im = cv2.imread(os.path.join(TEST_PATH, folder, f))
+        im = cv2.cvtColor(im, cv2.COLOR_RGB2GRAY)
+        im = cv2.resize(im, (36, 36))
+        testset.append(im)
+        test_label.append(int(folder))
+trainset = np.reshape(trainset, (5000, -1))
 
-# predict digit using SVM and KNN
+# Create an linear SVM object
+clf = LinearSVC()
 
-
-def load_mnist(filename, type, n_datapoints):
-    # MNIST Images have 28*28 pixels dimension
-    image_size = 28
-    f = gzip.open(filename)
-
-    if (type == 'image'):
-        f.read(16)  # Skip Non-Image information
-        buf = f.read(n_datapoints * image_size * image_size)
-        data = np.frombuffer(buf, dtype=np.uint8).astype(np.float32)
-        data = data.reshape(n_datapoints, image_size * image_size)
-
-    elif (type == 'label'):
-        f.read(8)  # Skip Inessential information
-        buf = f.read(n_datapoints)
-        data = np.frombuffer(buf, dtype=np.uint8).astype(np.int64)
-        data = data.reshape(n_datapoints, 1)
-    return data
-
-
-# Feature scaling to [0, 1]
-# x' = (x - min(x)) / (max(x) - min(x)) => x' = x / 255
-
-print('Training')
-TRAINING_SIZE = 10000  # maximun 60000
-
-train_images = load_mnist("mnist_data/train-images-idx3-ubyte.gz", 'image', TRAINING_SIZE)
-train_labels = load_mnist("mnist_data/train-labels-idx1-ubyte.gz", 'label', TRAINING_SIZE)
-
-clf = SVC(C=5)
-
-clf.fit(train_images, train_labels)
+# Perform the training
+clf.fit(trainset, train_label)
 print("Training finished successfully")
 
-TEST_SIZE = 1000  # 10000
-test_images = load_mnist("mnist_data/t10k-images-idx3-ubyte.gz", 'image', TEST_SIZE)
-test_labels = load_mnist("mnist_data/t10k-labels-idx1-ubyte.gz", 'label', TEST_SIZE)
+# Testing
+testset = np.reshape(testset, (len(testset), -1))
+y = clf.predict(testset)
+print("Testing accuracy: " + str(clf.score(testset, test_label)))
 
-# print(clf.score(test_images, test_labels))
-
-print("PREDICT")
-predict = clf.predict(test_images)
-
-print("RESULT")
-ac_score = metrics.accuracy_score(test_labels, predict)
-cl_report = metrics.classification_report(test_labels, predict)
-print("Score = ", ac_score)
-print(cl_report)
-
-
-# save model
 joblib.dump(clf, "classifier.pkl", compress=3)
