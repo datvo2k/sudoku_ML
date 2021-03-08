@@ -1,15 +1,18 @@
 from keras.datasets import mnist
 from keras.utils import to_categorical
-from keras.models import Sequential
 from keras.layers import Conv2D
 from keras.layers import MaxPooling2D
 from keras.layers import Dense
 from keras.layers import Flatten
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adam
 import matplotlib.pyplot as plt
 import numpy as np
 from keras.callbacks import ModelCheckpoint
 import tensorflow as tf
+from keras.preprocessing.image import ImageDataGenerator
+from keras.applications import MobileNet
+import keras
+
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
@@ -25,8 +28,8 @@ def load_dataset():
     # load dataset
     (trainX, trainY), (testX, testY) = mnist.load_data()
     # reshape dataset to have a single channel
-    trainX = trainX.reshape((trainX.shape[0], 28, 28, 1))
-    testX = testX.reshape((testX.shape[0], 28, 28, 1))
+    trainX = trainX.reshape((trainX.shape[0], 224, 224, 1))
+    testX = testX.reshape((testX.shape[0], 224, 224, 1))
     # one hot encode target values
     trainY = to_categorical(trainY)
     testY = to_categorical(testY)
@@ -45,21 +48,14 @@ def prep_pixels(train, test):
 
 
 def define_model():
-    model = Sequential()
-    model.add(Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', input_shape=(28, 28, 1)))
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform'))
-    model.add(Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform'))
-    model.add(MaxPooling2D((2, 2)))
-    model.add(Flatten())
-    model.add(Dense(100, activation='relu', kernel_initializer='he_uniform'))
-    model.add(Dense(10, activation='softmax'))
+    base_network = MobileNet(input_shape=(224, 224, 1), include_top=False, weights=None)
+    flat = Flatten()
+    den = Dense(10, activation='softmax')
 
-    # compile model
-    opt = SGD(lr=0.01, momentum=0.9)
-    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+    model = keras.Sequential([base_network, flat, den])
+    model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+    model.summary()
 
-    print(model.summary())
     return model
 
 
@@ -86,17 +82,40 @@ def show_plot(history):
 
 def run_test_harness():
     # load dataset
-    trainX, trainY, testX, testY = load_dataset()
-    # prepare pixel data
-    trainX, testX = prep_pixels(trainX, testX)
+    train_dir = 'mnist_data/Train'
+    test_dir = 'mnist_data/Test'
+
+    train_datagen = ImageDataGenerator(rescale=1 / 255.0, rotation_range=20, zoom_range=0.05,
+                                       width_shift_range=0.05, height_shift_range=0.05, shear_range=0.05,
+                                       horizontal_flip=True, fill_mode="nearest", validation_split=0.20)
+
+    test_datagen = ImageDataGenerator(rescale=1 / 255.0)
+
+    train_generator = train_datagen.flow_from_directory(directory=train_dir, target_size=(224, 224),
+                                                        color_mode="grayscale",
+                                                        batch_size=16, class_mode="categorical", subset='training',
+                                                        shuffle=True, seed=42)
+
+    valid_generator = train_datagen.flow_from_directory(directory=train_dir, target_size=(224, 224),
+                                                        color_mode="grayscale",
+                                                        batch_size=16, class_mode="categorical", subset='validation',
+                                                        shuffle=True, seed=42)
+
+    test_generator = test_datagen.flow_from_directory(directory=test_dir, target_size=(224, 224),
+                                                      color_mode="grayscale",
+                                                      batch_size=1, class_mode=None, shuffle=False, seed=42)
+
     # define model
     filepath = "weights/weights-improvement-{epoch:02d}-{loss:.2f}.hdf5"
     model = define_model()
-    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=5, save_best_only=True, mode='min')
+    checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=3, save_best_only=True, mode='min')
     callbacks_list = [checkpoint]
+
     # fit model
-    history = model.fit(trainX, trainY, epochs=10, batch_size=32, validation_split=0.2,
-                        callbacks=callbacks_list, verbose=1)
+    history = model.fit_generator(train_generator, validation_data=train_generator,
+                                  steps_per_epoch=train_generator.n // train_generator.batch_size,
+                                  validation_steps=valid_generator.n // valid_generator.batch_size,
+                                  epochs=10, callbacks=callbacks_list)
     show_plot(history)
     print(history.history.keys())
     # save model

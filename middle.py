@@ -32,11 +32,11 @@ def show_img(img, title):
 
 def load_img_to_predict(img_path):
     # load the image
-    img = cv2.resize(img_path, (28, 28))
+    img = cv2.resize(img_path, (224, 224))
     # convert to array
     img = img_to_array(img)
     # reshape into a single sample with 1 channel
-    img = img.reshape(1, 28, 28, 1)
+    img = img.reshape(1, 224, 224, 1)
     # prepare pixel data
     img = img.astype('float32')
     img = img / 255.0
@@ -147,13 +147,18 @@ def sort_digits_to_matrix(image, model):
             cv2.imshow('block', block)
 
             img_predict = load_img_to_predict(block)
-            digit = clf.predict_classes(img_predict)
-            print(digit[0])
+
+            # make predictions on the input image
+
+            digit = clf.predict(img_predict)
+            digit = digit.argmax(axis=1)[0]
+
+            print(digit)
 
 
 if __name__ == '__main__':
     # _27_6709977.jpeg - .jpeg - _139_9456064.jpeg
-    img_processed = process_images.get_sudoku_board('aug/_27_6709977.jpeg')  # afer warp
+    img_processed = process_images.get_sudoku_board('aug/_139_9456064.jpeg')  # afer warp
     model = 'final_model.h5'
     # lines = get_line_board(img_processed)
     # grids_, warp2_ = grids(img_processed, lines)
