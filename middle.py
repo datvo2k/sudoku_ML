@@ -32,11 +32,11 @@ def show_img(img, title):
 
 def load_img_to_predict(img_path):
     # load the image
-    img = cv2.resize(img_path, (224, 224))
+    img = cv2.resize(img_path, (28, 28))
     # convert to array
     img = img_to_array(img)
     # reshape into a single sample with 1 channel
-    img = img.reshape(1, 224, 224, 1)
+    img = img.reshape(1, 28, 28, 1)
     # prepare pixel data
     img = img.astype('float32')
     img = img / 255.0
@@ -44,15 +44,13 @@ def load_img_to_predict(img_path):
 
 
 def trans_img(image):
-    # Kernel size: +ve, odd, square
-    kernel = np.ones((3, 3), np.uint8)
     img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
     preprocess = cv2.GaussianBlur(img.copy(), (9, 9), 0)
     preprocess = cv2.adaptiveThreshold(preprocess, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    preprocess = cv2.dilate(preprocess, kernel, iterations=0)
-    # we need grid edges, hence,
-    # invert colors: gridlines will have non-zero pixels
+
+    kernel = np.ones((3, 3), np.uint8)
+
+    preprocess = cv2.dilate(preprocess, kernel, iterations=1)
     preprocess = cv2.bitwise_not(preprocess, preprocess)
 
     return preprocess
@@ -96,6 +94,7 @@ def grids(img, warped2):
 
 
 def sort_digits_to_matrix(image, model):
+
     kernel = np.ones((4, 4), np.uint8)
     clf = keras.models.load_model(model)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -123,6 +122,8 @@ def sort_digits_to_matrix(image, model):
 
     sudoku_rows = []
     row = []
+    matrix = []
+
     for (i, c) in enumerate(cnts, 1):
         area = cv2.contourArea(c)
         if area < 50000:
@@ -152,15 +153,21 @@ def sort_digits_to_matrix(image, model):
 
             digit = clf.predict(img_predict)
             digit = digit.argmax(axis=1)[0]
-
             print(digit)
+            matrix.append(digit)
+
+    matrix = np.array(matrix)
+    matrix = matrix.reshape(9, 9)
+
+    return matrix
 
 
 if __name__ == '__main__':
     # _27_6709977.jpeg - .jpeg - _139_9456064.jpeg
-    img_processed = process_images.get_sudoku_board('aug/_139_9456064.jpeg')  # afer warp
+    img_processed = process_images.get_sudoku_board('aug/_27_6709977.jpeg')  # afer warp
     model = 'final_model.h5'
     # lines = get_line_board(img_processed)
     # grids_, warp2_ = grids(img_processed, lines)
     # show_image(warp2_, 'test')
-    sort_digits_to_matrix(img_processed, model)
+    matrix = sort_digits_to_matrix(img_processed, model)
+    print(matrix)
